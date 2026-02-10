@@ -4,6 +4,8 @@ import os
 
 load_dotenv()
 
+#find out how to use all different api end points 
+
 API_KEY = os.getenv('API_KEY')
 url = 'https://api.collegebasketballdata.com/'
 
