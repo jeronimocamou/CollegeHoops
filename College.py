@@ -1,8 +1,11 @@
 import requests
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 
-API_KEY = 'your_api_key_here'
-url = 'https://api.example.com/data'
+API_KEY = os.getenv('API_KEY')
+url = 'https://api.collegebasketballdata.com/'
 
 headers = {
     'Authorization': f'Bearer {API_KEY}',
