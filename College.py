@@ -5,6 +5,7 @@ import os
 load_dotenv()
 
 #find out how to use all different api end points 
+#Bill James Log5 formula for predicting outcomes
 
 API_KEY = os.getenv('API_KEY')
 url = 'https://api.collegebasketballdata.com/'
