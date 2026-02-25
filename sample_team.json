@@ -1,0 +1,17 @@
+{
+  "id": 96,
+  "sourceId": "45",
+  "school": "George Washington",
+  "mascot": "Revolutionaries",
+  "abbreviation": "GW",
+  "displayName": "George Washington Revolutionaries",
+  "shortDisplayName": "G Washington",
+  "primaryColor": "002843",
+  "secondaryColor": "e8d2a1",
+  "currentVenueId": 136,
+  "currentVenue": "Charles E. Smith Center",
+  "currentCity": "Washington",
+  "currentState": "DC",
+  "conferenceId": 1,
+  "conference": "A-10"
+}
