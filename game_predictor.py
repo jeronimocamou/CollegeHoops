@@ -175,7 +175,8 @@ class GamePredictor:
             'win_pct': wins / len(team_games),
             'avg_points': np.mean(points_for),
             'avg_points_against': np.mean(points_against),
-            'point_diff': np.mean(points_for) - np.mean(points_against)
+            'point_diff': np.mean(points_for) - np.mean(points_against),
+            'games_found': len(team_games)
         }
     
     def create_game_features(self, game):
@@ -195,9 +196,17 @@ class GamePredictor:
                 features[col] = self.historical_df[col].median()
         
         # Calculate recent stats
+        home_stats_all = {}
+        away_stats_all = {}
+        
         for window in [5, 10, 20]:
             home_stats = self.calculate_team_features(game['home_team_id'], window)
             away_stats = self.calculate_team_features(game['away_team_id'], window)
+            
+            # Store for debug output
+            if window == 10:
+                home_stats_all = home_stats
+                away_stats_all = away_stats
             
             if home_stats and away_stats:
                 if f'home_win_pct_{window}' in self.feature_cols:
@@ -225,7 +234,25 @@ class GamePredictor:
                 if f'offensive_diff_{window}' in self.feature_cols:
                     features[f'offensive_diff_{window}'] = home_stats['avg_points'] - away_stats['avg_points']
         
-        return pd.DataFrame([features])[self.feature_cols], home_stats, away_stats
+        # DEBUG OUTPUT
+        print(f"\n  📊 DATA QUALITY CHECK:")
+        print(f"     {game['home_team']} (HOME):")
+        if home_stats_all:
+            print(f"       ✅ {home_stats_all['games_found']} games found")
+            print(f"       📈 {home_stats_all['avg_points']:.1f} ppg, {home_stats_all['avg_points_against']:.1f} allowed")
+            print(f"       🏆 {home_stats_all['win_pct']*100:.0f}% win rate, {home_stats_all['point_diff']:+.1f} pt differential")
+        else:
+            print(f"       ⚠️  NO DATA - using median values from all teams")
+        
+        print(f"     {game['away_team']} (AWAY):")
+        if away_stats_all:
+            print(f"       ✅ {away_stats_all['games_found']} games found")
+            print(f"       📈 {away_stats_all['avg_points']:.1f} ppg, {away_stats_all['avg_points_against']:.1f} allowed")
+            print(f"       🏆 {away_stats_all['win_pct']*100:.0f}% win rate, {away_stats_all['point_diff']:+.1f} pt differential")
+        else:
+            print(f"       ⚠️  NO DATA - using median values from all teams")
+        
+        return pd.DataFrame([features])[self.feature_cols], home_stats_all, away_stats_all
     
     def add_odds_to_predictions(self, predictions, odds_data):
         """Add odds information to predictions"""
@@ -247,11 +274,6 @@ class GamePredictor:
                             for outcome in spread_market['outcomes']:
                                 if 'home' in outcome['name'].lower() or pred['home_team'].split()[-1] in outcome['name']:
                                     predictions.at[i, 'vegas_spread'] = outcome.get('point', 0)
-                        
-                        # Get total
-                        totals_market = next((m for m in bookmaker['markets'] if m['key'] == 'totals'), None)
-                        if totals_market and totals_market['outcomes']:
-                            predictions.at[i, 'vegas_total'] = totals_market['outcomes'][0].get('point', 0)
                     
                     break
         
@@ -268,9 +290,13 @@ class GamePredictor:
         odds_data = self.get_odds()
         
         print("🤖 Generating predictions...\n")
+        print("="*90)
+        
         predictions = []
         
         for idx, game in games_df.iterrows():
+            print(f"\nProcessing: {game['away_team']} @ {game['home_team']}")
+            
             try:
                 features, home_stats, away_stats = self.create_game_features(game)
                 features_imputed = self.imputer.transform(features)
@@ -278,21 +304,25 @@ class GamePredictor:
                 pred_proba = self.model.predict_proba(features_imputed)[0]
                 pred_class = self.model.predict(features_imputed)[0]
                 
-                # Calculate predicted spread and total
-                # Spread: based on point differential + home advantage
+                # Calculate predicted spread
                 home_expected = home_stats['avg_points'] if home_stats else 75
                 away_expected = away_stats['avg_points'] if away_stats else 75
                 home_def = home_stats['avg_points_against'] if home_stats else 70
                 away_def = away_stats['avg_points_against'] if away_stats else 70
                 
-                # Predicted total (average of both team projections)
+                # Predicted scoring
                 home_projected = (home_expected + away_def) / 2
                 away_projected = (away_expected + home_def) / 2
-                predicted_total = home_projected + away_projected
                 
-                # Predicted spread (home - away, accounting for home court)
+                # Add home court advantage
                 home_advantage = 3.0 if not game.get('neutral_site', False) else 0
-                predicted_spread = (home_projected - away_projected) + home_advantage
+                home_projected += home_advantage
+                
+                # Predicted spread (NEGATIVE means home team favored)
+                predicted_spread = -(home_projected - away_projected)
+                
+                # Mark data quality
+                has_good_data = (home_stats is not None and away_stats is not None)
                 
                 prediction = {
                     'game_id': game['game_id'],
@@ -301,17 +331,17 @@ class GamePredictor:
                     'home_team': game['home_team'],
                     'neutral_site': game['neutral_site'],
                     'predicted_winner': 'HOME' if pred_class == 1 else 'AWAY',
-                    'home_win_probability': pred_proba[1] * 100,
-                    'away_win_probability': pred_proba[0] * 100,
                     'confidence': 'HIGH' if abs(pred_proba[1] - 0.5) > 0.2 else 'MEDIUM' if abs(pred_proba[1] - 0.5) > 0.1 else 'LOW',
                     'predicted_spread': predicted_spread,
-                    'predicted_total': predicted_total
+                    'data_quality': 'GOOD' if has_good_data else 'POOR'
                 }
                 
                 predictions.append(prediction)
                 
             except Exception as e:
                 print(f"❌ Error predicting {game['home_team']} vs {game['away_team']}: {e}")
+        
+        print("\n" + "="*90 + "\n")
         
         predictions_df = pd.DataFrame(predictions)
         predictions_df = self.add_odds_to_predictions(predictions_df, odds_data)
@@ -323,63 +353,90 @@ class GamePredictor:
         if predictions is None or len(predictions) == 0:
             return
         
-        print("="*100)
-        print(f"{'COLLEGE BASKETBALL PREDICTIONS':^100}")
-        print("="*100 + "\n")
+        # Filter out predictions with extreme disagreement (likely bad data)
+        predictions_filtered = []
+        skipped = []
+        
+        for _, pred in predictions.iterrows():
+            if 'vegas_spread' in pred and not pd.isna(pred['vegas_spread']):
+                spread_diff = abs(pred['predicted_spread'] - pred['vegas_spread'])
+                if spread_diff > 15:  # If we disagree by more than 15 points
+                    skipped.append({
+                        'game': f"{pred['away_team']} @ {pred['home_team']}",
+                        'reason': f"Off by {spread_diff:.1f} pts - likely insufficient data",
+                        'data_quality': pred.get('data_quality', 'UNKNOWN')
+                    })
+                    continue
+            predictions_filtered.append(pred)
+        
+        if len(skipped) > 0:
+            print("="*90)
+            print("⚠️  SKIPPED PREDICTIONS (Unreliable Data)")
+            print("="*90)
+            for skip in skipped:
+                print(f"  {skip['game']}")
+                print(f"    Reason: {skip['reason']}")
+                print(f"    Data Quality: {skip['data_quality']}")
+            print()
+        
+        if len(predictions_filtered) == 0:
+            print("No reliable predictions available.\n")
+            return
+        
+        predictions = pd.DataFrame(predictions_filtered)
+        
+        print("="*90)
+        print(f"{'COLLEGE BASKETBALL PREDICTIONS':^90}")
+        print("="*90 + "\n")
         
         for idx, pred in enumerate(predictions.iterrows(), 1):
             _, pred = pred
             
-            print(f"{'─'*100}")
+            print(f"{'─'*90}")
             print(f"GAME {idx}: {pred['away_team']} @ {pred['home_team']}")
-            print(f"{'─'*100}")
+            
+            # Show data quality warning
+            if pred.get('data_quality') == 'POOR':
+                print(f"         ⚠️  WARNING: Limited historical data - use caution")
+            
+            print(f"{'─'*90}")
             
             # Prediction
-            print(f"\n  PREDICTION:          {pred['predicted_winner']}")
+            winner = pred['home_team'] if pred['predicted_winner'] == 'HOME' else pred['away_team']
+            print(f"\n  PICK:                {winner}")
+            print(f"  CONFIDENCE:          {pred['confidence']}")
             
-            # Probabilities
-            print(f"  Home Win %:          {pred['home_win_probability']:.1f}%")
-            print(f"  Away Win %:          {pred['away_win_probability']:.1f}%")
-            print(f"  Confidence:          {pred['confidence']}")
-            
-            # Vegas data
+            # Spreads
             has_vegas = 'vegas_spread' in pred and not pd.isna(pred['vegas_spread'])
             
-            if has_vegas:
-                print(f"\n  Vegas Spread:        {pred['home_team'][:20]} {pred['vegas_spread']:+.1f}")
-                print(f"  Vegas Over/Under:    {pred['vegas_total']:.1f}")
-            else:
-                print(f"\n  Vegas Spread:        Not available")
-                print(f"  Vegas Over/Under:    Not available")
+            print(f"\n  PREDICTED SPREAD:    {pred['home_team'][:30]} {pred['predicted_spread']:+.1f}")
             
-            # Our predictions
-            print(f"\n  Predicted Spread:    {pred['home_team'][:20]} {pred['predicted_spread']:+.1f}")
-            print(f"  Predicted Total:     {pred['predicted_total']:.1f}")
-            
-            # Value analysis
             if has_vegas:
+                print(f"  VEGAS SPREAD:        {pred['home_team'][:30]} {pred['vegas_spread']:+.1f}")
+                
+                # Value analysis
                 spread_diff = abs(pred['predicted_spread'] - pred['vegas_spread'])
-                total_diff = abs(pred['predicted_total'] - pred['vegas_total'])
                 
                 print(f"\n  VALUE ANALYSIS:")
                 
-                # Spread value
                 if spread_diff > 4:
-                    if pred['predicted_spread'] > pred['vegas_spread']:
-                        print(f"    🔥 STRONG VALUE: Bet {pred['home_team'][:25]} ({spread_diff:.1f} pt edge)")
+                    if pred['predicted_spread'] < pred['vegas_spread']:
+                        print(f"    🔥 STRONG VALUE on {pred['home_team'][:30]}")
+                        print(f"       Our model has them {spread_diff:.1f} points stronger than Vegas")
                     else:
-                        print(f"    🔥 STRONG VALUE: Bet {pred['away_team'][:25]} ({spread_diff:.1f} pt edge)")
-                elif spread_diff > 2:
-                    print(f"    📊 Moderate value: {spread_diff:.1f} point difference")
-                else:
-                    print(f"    ✅ Agreement with Vegas")
+                        print(f"    🔥 STRONG VALUE on {pred['away_team'][:30]}")
+                        print(f"       Our model has them {spread_diff:.1f} points stronger than Vegas")
                 
-                # Total value
-                if total_diff > 5:
-                    if pred['predicted_total'] > pred['vegas_total']:
-                        print(f"    💰 OVER value: Model expects {total_diff:.1f} more points")
+                elif spread_diff > 2:
+                    if pred['predicted_spread'] < pred['vegas_spread']:
+                        print(f"    📊 Moderate value on {pred['home_team'][:30]} ({spread_diff:.1f} pt edge)")
                     else:
-                        print(f"    💰 UNDER value: Model expects {total_diff:.1f} fewer points")
+                        print(f"    📊 Moderate value on {pred['away_team'][:30]} ({spread_diff:.1f} pt edge)")
+                
+                else:
+                    print(f"    ✅ Model agrees with Vegas (within {spread_diff:.1f} pts)")
+            else:
+                print(f"  VEGAS SPREAD:        Not available")
             
             print()
         
@@ -389,14 +446,15 @@ class GamePredictor:
         os.makedirs('predictions', exist_ok=True)
         predictions.to_csv(output_file, index=False)
         
-        print("="*100)
-        print(f"SUMMARY: {len(predictions)} games predicted")
+        print("="*90)
+        print(f"SUMMARY: {len(predictions)} reliable predictions")
+        if len(skipped) > 0:
+            print(f"         {len(skipped)} games skipped due to insufficient data")
         print(f"Saved to: {output_file}")
-        print("="*100 + "\n")
+        print("="*90 + "\n")
 
 # Usage
 if __name__ == "__main__":
     predictor = GamePredictor()
     predictions = predictor.predict_games()
     predictor.display_predictions(predictions)
-

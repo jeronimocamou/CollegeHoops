@@ -1,0 +1,6 @@
+game_id,date,away_team,home_team,neutral_site,predicted_winner,confidence,predicted_spread,data_quality,vegas_spread
+401822959,2026-02-26T00:00Z,St. John's Red Storm,UConn Huskies,False,HOME,MEDIUM,-3.0,POOR,-4.5
+401808264,2026-02-26T00:00Z,Florida Gators,Texas Longhorns,False,HOME,MEDIUM,-3.0,POOR,6.5
+401808261,2026-02-26T00:00Z,Georgia Bulldogs,Vanderbilt Commodores,False,HOME,MEDIUM,-3.0,POOR,-8.5
+401808263,2026-02-26T02:00Z,Mississippi State Bulldogs,Alabama Crimson Tide,False,HOME,MEDIUM,-3.0,POOR,
+401808259,2026-02-26T02:00Z,Texas A&M Aggies,Arkansas Razorbacks,False,HOME,MEDIUM,-3.0,POOR,-8.5

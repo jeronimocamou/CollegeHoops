@@ -1,8 +1,0 @@
-game_id,date,away_team,home_team,neutral_site,predicted_winner,home_win_probability,away_win_probability,confidence,vegas_spread,away_moneyline,home_moneyline,over_under
-401822959,2026-02-26T00:00Z,St. John's Red Storm,UConn Huskies,False,home,66.14786741816084,33.85213258183916,medium,-4.5,2.9,1.43,145.5
-401808264,2026-02-26T00:00Z,Florida Gators,Texas Longhorns,False,home,66.14786741816084,33.85213258183916,medium,6.5,1.32,3.45,158.5
-401825541,2026-02-26T00:00Z,Maryland Terrapins,Nebraska Cornhuskers,False,home,66.14786741816084,33.85213258183916,medium,-18.5,13.8,1.03,142.5
-401808261,2026-02-26T00:00Z,Georgia Bulldogs,Vanderbilt Commodores,False,home,66.14786741816084,33.85213258183916,medium,-8.5,4.9,1.19,165.5
-401829260,2026-02-26T02:00Z,Portland Pilots,Gonzaga Bulldogs,False,home,66.14786741816084,33.85213258183916,medium,-26.5,,,149.5
-401808263,2026-02-26T02:00Z,Mississippi State Bulldogs,Alabama Crimson Tide,False,home,66.14786741816084,33.85213258183916,medium,,,,
-401808259,2026-02-26T02:00Z,Texas A&M Aggies,Arkansas Razorbacks,False,home,66.14786741816084,33.85213258183916,medium,-8.5,4.2,1.24,169.5
